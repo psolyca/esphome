@@ -3,21 +3,21 @@ from esphome.components import fan
 import esphome.config_validation as cv
 from esphome.const import CONF_ID, CONF_SPEED_COUNT, CONF_SWITCH_DATAPOINT
 
-from .. import CONF_TUYA_ID, Tuya, tuya_ns
+from .. import CONF_TUYALOWPOWER_ID, TuyaLowPower, tuya_low_power_ns
 
-DEPENDENCIES = ["tuya"]
+DEPENDENCIES = ["tuya_low_power"]
 
 CONF_SPEED_DATAPOINT = "speed_datapoint"
 CONF_OSCILLATION_DATAPOINT = "oscillation_datapoint"
 CONF_DIRECTION_DATAPOINT = "direction_datapoint"
 
-TuyaFan = tuya_ns.class_("TuyaFan", cg.Component, fan.Fan)
+TuyaFan = tuya_low_power_ns.class_("TuyaFan", cg.Component, fan.Fan)
 
 CONFIG_SCHEMA = cv.All(
     fan.fan_schema(TuyaFan)
     .extend(
         {
-            cv.GenerateID(CONF_TUYA_ID): cv.use_id(Tuya),
+            cv.GenerateID(CONF_TUYALOWPOWER_ID): cv.use_id(TuyaLowPower),
             cv.Optional(CONF_OSCILLATION_DATAPOINT): cv.uint8_t,
             cv.Optional(CONF_SPEED_DATAPOINT): cv.uint8_t,
             cv.Optional(CONF_SWITCH_DATAPOINT): cv.uint8_t,
@@ -31,7 +31,7 @@ CONFIG_SCHEMA = cv.All(
 
 
 async def to_code(config):
-    parent = await cg.get_variable(config[CONF_TUYA_ID])
+    parent = await cg.get_variable(config[CONF_TUYALOWPOWER_ID])
 
     var = cg.new_Pvariable(config[CONF_ID], parent, config[CONF_SPEED_COUNT])
     await cg.register_component(var, config)

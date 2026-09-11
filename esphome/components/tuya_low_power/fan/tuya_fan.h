@@ -1,14 +1,14 @@
 #pragma once
 
 #include "esphome/core/component.h"
-#include "esphome/components/tuya/tuya.h"
+#include "esphome/components/tuya_low_power/tuya_low_power.h"
 #include "esphome/components/fan/fan.h"
 
-namespace esphome::tuya {
+namespace esphome::tuya_low_power {
 
 class TuyaFan final : public Component, public fan::Fan {
  public:
-  TuyaFan(Tuya *parent, int speed_count) : parent_(parent), speed_count_(speed_count) {}
+  TuyaFan(TuyaLowPower *parent, int speed_count) : parent_(parent), speed_count_(speed_count) {}
   void setup() override;
   void dump_config() override;
   void set_speed_id(uint8_t speed_id) { this->speed_id_ = speed_id; }
@@ -21,7 +21,7 @@ class TuyaFan final : public Component, public fan::Fan {
  protected:
   void control(const fan::FanCall &call) override;
 
-  Tuya *parent_;
+  TuyaLowPower *parent_;
   optional<uint8_t> speed_id_{};
   optional<uint8_t> switch_id_{};
   optional<uint8_t> oscillation_id_{};
@@ -31,4 +31,4 @@ class TuyaFan final : public Component, public fan::Fan {
   TuyaDatapointType oscillation_type_{};
 };
 
-}  // namespace esphome::tuya
+}  // namespace esphome::tuya_low_power
