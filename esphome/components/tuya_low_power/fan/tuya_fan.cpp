@@ -1,9 +1,9 @@
 #include "esphome/core/log.h"
 #include "tuya_fan.h"
 
-namespace esphome::tuya {
+namespace esphome::tuya_low_power {
 
-static const char *const TAG = "tuya.fan";
+static const char *const TAG = "tuya_low_power.fan";
 
 void TuyaFan::setup() {
   auto speed_id = this->speed_id_;
@@ -126,4 +126,4 @@ void TuyaFan::control(const fan::FanCall &call) {
   }
 }
 
-}  // namespace esphome::tuya
+}  // namespace esphome::tuya_low_power
