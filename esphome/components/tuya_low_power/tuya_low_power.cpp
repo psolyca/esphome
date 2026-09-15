@@ -1,5 +1,6 @@
 #include "tuya_low_power.h"
 #include "esphome/components/network/util.h"
+#include "esphome/components/safe_mode/safe_mode.h"
 #include "esphome/core/gpio.h"
 #include "esphome/core/helpers.h"
 #include "esphome/core/log.h"
@@ -12,6 +13,9 @@
 #ifdef USE_CAPTIVE_PORTAL
 #include "esphome/components/captive_portal/captive_portal.h"
 #endif
+
+// Low Powered devices can be shut down after 37s if every thing is ok
+// So we mark successful boot after MQTT/API connection cause normal boot is 60 s.
 
 namespace esphome::tuya_low_power {
 
@@ -27,14 +31,13 @@ void TuyaLowPower::setup() {}
 void TuyaLowPower::loop() {
   // Communication is initiated by the network module
   // No other command should be received before
-  // ToDo loop is too fast, initial command is sent to early so there is too many time before the handskae and the
-  // network init
   if (this->init_state_ == TuyaInitState::INIT_HANDSHAKE) {
-    ESP_LOGD(TAG, "Send PRODUCT...");
+    // ESP_LOGD(TAG, "Send PRODUCT...");
     this->send_empty_command_(TuyaCommandType::PRODUCT);
-  } else if (this->init_state_ == TuyaInitState::INIT_NETWORK &&
-             (this->init_state_ == TuyaInitState::INIT_CLOUD || this->check_local_time_())) {
-    ESP_LOGD(TAG, "Report network...");
+    this->init_state_ = TuyaInitState::HANDSHAKE_DONE;
+  } else if (this->init_state_ == TuyaInitState::INIT_NETWORK ||
+             (this->init_state_ == TuyaInitState::INIT_CLOUD && this->check_local_time_())) {
+    // ESP_LOGD(TAG, "Report network...");
     this->report_network_status_();
   }
   // Read all available bytes in batches to reduce UART call overhead.
@@ -160,7 +163,7 @@ void TuyaLowPower::handle_command_(uint8_t command, uint8_t version, const uint8
   TuyaCommandType command_type = (TuyaCommandType) command;
 
   if (this->expected_response_.has_value() && this->expected_response_ == command_type) {
-    ESP_LOGD(TAG, "Handle_command : Reset expected response");
+    // ESP_LOGD(TAG, "Handle_command : Reset expected response : %u", command);
     this->expected_response_.reset();
     this->command_queue_.erase(command_queue_.begin());
     this->init_retries_ = 0;
@@ -181,8 +184,8 @@ void TuyaLowPower::handle_command_(uint8_t command, uint8_t version, const uint8
       } else {
         this->product_ = R"({"p":"INVALID"})";
       }
-      if (this->init_state_ == TuyaInitState::INIT_HANDSHAKE) {
-        ESP_LOGD(TAG, "Init network connection...");
+      if (this->init_state_ == TuyaInitState::HANDSHAKE_DONE) {
+        // ESP_LOGD(TAG, "Init network connection...");
         this->init_state_ = TuyaInitState::INIT_NETWORK;
       }
       break;
@@ -190,10 +193,10 @@ void TuyaLowPower::handle_command_(uint8_t command, uint8_t version, const uint8
     case TuyaCommandType::NETWORK_STATE: {
       if (this->init_state_ == TuyaInitState::INIT_NETWORK &&
           this->network_status_ == TuyaNetworkState::CONNECTED_TO_ROUTER) {
-        ESP_LOGD(TAG, "Init connection to cloud...");
+        // ESP_LOGD(TAG, "Init connection to cloud...");
         this->init_state_ = TuyaInitState::INIT_CLOUD;
       } else if (this->init_state_ == TuyaInitState::INIT_CLOUD && this->check_local_time_()) {
-        ESP_LOGD(TAG, "Init connection done...");
+        // ESP_LOGD(TAG, "Init connection done...");
         this->init_state_ = TuyaInitState::INIT_DONE;
       }
       break;
@@ -400,15 +403,15 @@ void TuyaLowPower::send_raw_command_(TuyaCommand command) {
   switch (command.cmd) {
     case TuyaCommandType::PRODUCT:
       this->expected_response_ = TuyaCommandType::PRODUCT;
-      ESP_LOGD(TAG, "expected response is PRODUCT...");
+      // ESP_LOGD(TAG, "expected response is PRODUCT...");
       break;
     case TuyaCommandType::NETWORK_STATE:
       this->expected_response_ = TuyaCommandType::NETWORK_STATE;
-      ESP_LOGD(TAG, "expected response is NETWORK_STATE...");
+      // ESP_LOGD(TAG, "expected response is NETWORK_STATE...");
       break;
     case TuyaCommandType::DATAPOINT_DELIVER:
       this->expected_response_ = TuyaCommandType::DATAPOINT_DELIVER;
-      ESP_LOGD(TAG, "expected response is DATAPOINT_DELIVER...");
+      // ESP_LOGD(TAG, "expected response is DATAPOINT_DELIVER...");
       break;
     default:
       break;
@@ -440,7 +443,7 @@ void TuyaLowPower::process_command_queue_() {
   }
 
   if (this->expected_response_.has_value() && delay > RECEIVE_TIMEOUT) {
-    ESP_LOGD(TAG, "Process_command_queue : Reset expected response");
+    // ESP_LOGD(TAG, "Process_command_queue : Reset expected response");
     this->expected_response_.reset();
     if (init_state_ != TuyaInitState::INIT_DONE) {
       if (++this->init_retries_ >= MAX_RETRIES) {
@@ -457,7 +460,7 @@ void TuyaLowPower::process_command_queue_() {
   // Left check of delay since last command in case there's ever a command sent by calling send_raw_command_ directly
   if (delay > COMMAND_DELAY && !this->command_queue_.empty() && this->rx_message_.empty() &&
       !this->expected_response_.has_value()) {
-    ESP_LOGD(TAG, "Process_command_queue send raw command");
+    // ESP_LOGD(TAG, "Process_command_queue send raw command");
     this->send_raw_command_(command_queue_.front());
     if (!this->expected_response_.has_value())
       this->command_queue_.erase(command_queue_.begin());
@@ -474,13 +477,13 @@ void TuyaLowPower::send_empty_command_(TuyaCommandType command) {
 }
 
 TuyaNetworkState TuyaLowPower::get_network_status_code_() {
-  TuyaNetworkState status = TuyaNetworkState::NOT_CONNECTED;
+  TuyaNetworkState status = TuyaNetworkState::NOT_CONNECTED;  // 0x02
 
   if (network::is_connected()) {
-    status = TuyaNetworkState::CONNECTED_TO_ROUTER;
+    status = TuyaNetworkState::CONNECTED_TO_ROUTER;  // 0x03
 
-    if (remote_is_connected()) {
-      status = TuyaNetworkState::CONNECTED_TO_CLOUD;
+    if (remote_is_connected() && this->init_state_ == TuyaInitState::INIT_CLOUD) {
+      status = TuyaNetworkState::CONNECTED_TO_CLOUD;  // 0x04
     }
   } else {
 #ifdef USE_CAPTIVE_PORTAL
@@ -504,6 +507,8 @@ uint8_t TuyaLowPower::get_network_rssi_() {  // ToDo, check how-to with bluetoot
 
 void TuyaLowPower::report_network_status_() {
   TuyaNetworkState status = this->get_network_status_code_();
+  // ESP_LOGD(TAG, "report_network_status_ - old status : %u - new status : %u",
+  //          static_cast<uint8_t>(this->network_status_), static_cast<uint8_t>(status));
 
   if (status == this->network_status_) {
     return;
@@ -516,6 +521,7 @@ void TuyaLowPower::report_network_status_() {
 
 #ifdef USE_TIME
 bool TuyaLowPower::check_local_time_() {
+  // ESP_LOGD(TAG, "Check local time");
   ESPTime local_time = this->time_id_->now();
   bool is_valid = local_time.is_valid();
   return is_valid;

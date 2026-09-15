@@ -73,6 +73,7 @@ enum class TuyaNetworkState : uint8_t {
 
 enum class TuyaInitState : uint8_t {
   INIT_HANDSHAKE = 0x00,
+  HANDSHAKE_DONE,
   INIT_NETWORK,
   INIT_CLOUD,
   INIT_DONE,
@@ -129,7 +130,6 @@ class TuyaLowPower final : public Component, public uart::UARTDevice {
   void set_string_datapoint_value_(uint8_t datapoint_id, const std::string &value, bool forced);
   void set_raw_datapoint_value_(uint8_t datapoint_id, const std::vector<uint8_t> &value, bool forced);
   void send_datapoint_command_(uint8_t datapoint_id, TuyaDatapointType datapoint_type, std::vector<uint8_t> data);
-  void set_status_pin_();
   void report_network_status_();
   TuyaNetworkState get_network_status_code_();
   uint8_t get_network_rssi_();
