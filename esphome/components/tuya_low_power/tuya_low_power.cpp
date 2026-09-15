@@ -27,10 +27,14 @@ void TuyaLowPower::setup() {}
 void TuyaLowPower::loop() {
   // Communication is initiated by the network module
   // No other command should be received before
+  // ToDo loop is too fast, initial command is sent to early so there is too many time before the handskae and the
+  // network init
   if (this->init_state_ == TuyaInitState::INIT_HANDSHAKE) {
+    ESP_LOGD(TAG, "Send PRODUCT...");
     this->send_empty_command_(TuyaCommandType::PRODUCT);
   } else if (this->init_state_ == TuyaInitState::INIT_NETWORK &&
              (this->init_state_ == TuyaInitState::INIT_CLOUD || this->check_local_time_())) {
+    ESP_LOGD(TAG, "Report network...");
     this->report_network_status_();
   }
   // Read all available bytes in batches to reduce UART call overhead.
@@ -156,6 +160,7 @@ void TuyaLowPower::handle_command_(uint8_t command, uint8_t version, const uint8
   TuyaCommandType command_type = (TuyaCommandType) command;
 
   if (this->expected_response_.has_value() && this->expected_response_ == command_type) {
+    ESP_LOGD(TAG, "Handle_command : Reset expected response");
     this->expected_response_.reset();
     this->command_queue_.erase(command_queue_.begin());
     this->init_retries_ = 0;
@@ -177,18 +182,18 @@ void TuyaLowPower::handle_command_(uint8_t command, uint8_t version, const uint8
         this->product_ = R"({"p":"INVALID"})";
       }
       if (this->init_state_ == TuyaInitState::INIT_HANDSHAKE) {
+        ESP_LOGD(TAG, "Init network connection...");
         this->init_state_ = TuyaInitState::INIT_NETWORK;
-        // ESP_LOGD(TAG, "Init network connection...");
       }
       break;
     }
     case TuyaCommandType::NETWORK_STATE: {
       if (this->init_state_ == TuyaInitState::INIT_NETWORK &&
           this->network_status_ == TuyaNetworkState::CONNECTED_TO_ROUTER) {
-        // ESP_LOGD(TAG, "Init connection to cloud...");
+        ESP_LOGD(TAG, "Init connection to cloud...");
         this->init_state_ = TuyaInitState::INIT_CLOUD;
       } else if (this->init_state_ == TuyaInitState::INIT_CLOUD && this->check_local_time_()) {
-        // ESP_LOGD(TAG, "Init connection done...");
+        ESP_LOGD(TAG, "Init connection done...");
         this->init_state_ = TuyaInitState::INIT_DONE;
       }
       break;
@@ -395,12 +400,15 @@ void TuyaLowPower::send_raw_command_(TuyaCommand command) {
   switch (command.cmd) {
     case TuyaCommandType::PRODUCT:
       this->expected_response_ = TuyaCommandType::PRODUCT;
+      ESP_LOGD(TAG, "expected response is PRODUCT...");
       break;
     case TuyaCommandType::NETWORK_STATE:
       this->expected_response_ = TuyaCommandType::NETWORK_STATE;
+      ESP_LOGD(TAG, "expected response is NETWORK_STATE...");
       break;
     case TuyaCommandType::DATAPOINT_DELIVER:
       this->expected_response_ = TuyaCommandType::DATAPOINT_DELIVER;
+      ESP_LOGD(TAG, "expected response is DATAPOINT_DELIVER...");
       break;
     default:
       break;
@@ -432,6 +440,7 @@ void TuyaLowPower::process_command_queue_() {
   }
 
   if (this->expected_response_.has_value() && delay > RECEIVE_TIMEOUT) {
+    ESP_LOGD(TAG, "Process_command_queue : Reset expected response");
     this->expected_response_.reset();
     if (init_state_ != TuyaInitState::INIT_DONE) {
       if (++this->init_retries_ >= MAX_RETRIES) {
@@ -448,6 +457,7 @@ void TuyaLowPower::process_command_queue_() {
   // Left check of delay since last command in case there's ever a command sent by calling send_raw_command_ directly
   if (delay > COMMAND_DELAY && !this->command_queue_.empty() && this->rx_message_.empty() &&
       !this->expected_response_.has_value()) {
+    ESP_LOGD(TAG, "Process_command_queue send raw command");
     this->send_raw_command_(command_queue_.front());
     if (!this->expected_response_.has_value())
       this->command_queue_.erase(command_queue_.begin());
